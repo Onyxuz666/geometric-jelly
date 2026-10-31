@@ -1,0 +1,1165 @@
+<title>Geometric Jelly</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one square stage centred, transport above, ring rail and tool bench below. Stacks to one column on a phone. */
+:root {
+  color-scheme: dark;
+  --ink:       #e8e6ef;
+  --ink-dim:   #8e8ba3;
+  --ink-faint: #56546a;
+  --ground:    #0a0b11;
+  --panel:     #14161f;
+  --panel-hi:  #1d202c;
+  --line:      #272a38;
+  --live:      #f4f1ea;
+  /* Ring hues walk the colour wheel by the golden angle, 137.5deg apart. */
+  --h0: 14; --h1: 151; --h2: 289; --h3: 66;
+
+  --display: 'Archivo', 'Helvetica Neue', Arial, sans-serif;
+  --mono: 'IBM Plex Mono', 'SF Mono', Menlo, monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--display);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 18px 40px;
+  margin: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.wrap { max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+
+/* ---------- header ---------- */
+header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+h1 {
+  font-size: 19px; font-weight: 700; letter-spacing: .13em; text-transform: uppercase;
+  margin: 0; color: var(--ink);
+}
+h1 span { color: var(--ink-faint); font-weight: 400; }
+.tagline { font-size: 12px; color: var(--ink-dim); margin: 0; font-family: var(--mono); }
+
+/* ---------- transport ---------- */
+.transport {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 3px;
+  padding: 10px 14px;
+}
+.play {
+  width: 46px; height: 46px; flex: none; border-radius: 50%;
+  border: 1px solid var(--line); background: var(--panel-hi); color: var(--ink);
+  display: grid; place-items: center; cursor: pointer; transition: background .15s, border-color .15s;
+}
+.play:hover { background: #262a38; }
+.play.on { background: var(--live); color: #0a0b11; border-color: var(--live); }
+.play svg { width: 17px; height: 17px; }
+
+.dial { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.dial label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .13em;
+  text-transform: uppercase; color: var(--ink-faint);
+}
+.dial .val { font-family: var(--mono); font-size: 13px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.dial input[type=range] { width: 108px; }
+
+input[type=range] {
+  -webkit-appearance: none; appearance: none; background: transparent; height: 18px; margin: 0; cursor: pointer;
+}
+input[type=range]::-webkit-slider-runnable-track { height: 2px; background: var(--line); border-radius: 2px; }
+input[type=range]::-moz-range-track { height: 2px; background: var(--line); border-radius: 2px; }
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 13px; height: 13px; border-radius: 50%;
+  background: var(--ink); margin-top: -5.5px; border: none;
+}
+input[type=range]::-moz-range-thumb { width: 13px; height: 13px; border-radius: 50%; background: var(--ink); border: none; }
+input[type=range]:focus-visible { outline: 2px solid var(--live); outline-offset: 3px; }
+
+/* ---------- stage ---------- */
+.stage { position: relative; width: 100%; aspect-ratio: 1; max-width: 560px; margin: 0 auto; max-height: 72vh; }
+.stage canvas { width: 100%; height: 100%; display: block; touch-action: none; border-radius: 50%; }
+.readout {
+  position: absolute; inset: 0; display: grid; place-content: center; text-align: center;
+  pointer-events: none; gap: 2px;
+}
+.readout .big {
+  font-family: var(--mono); font-size: 15px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ink);
+}
+.readout .sub { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+
+/* ---------- ring rail ---------- */
+.rail { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.ring-chip {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 3px;
+  padding: 9px 10px; cursor: pointer; text-align: left; color: var(--ink);
+  font-family: var(--display); display: flex; flex-direction: column; gap: 5px;
+  border-left: 3px solid hsl(var(--hue) 62% 52%); min-width: 0;
+}
+.ring-chip[aria-pressed="true"] { background: var(--panel-hi); border-color: hsl(var(--hue) 55% 42%); border-left-color: hsl(var(--hue) 75% 60%); }
+.ring-chip .nm {
+  font-size: 12px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ring-chip .meta { font-family: var(--mono); font-size: 10px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+.ring-chip.muted { opacity: .4; }
+.ring-chip.muted .nm { text-decoration: line-through; }
+
+/* ---------- bench ---------- */
+.bench {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 3px;
+  padding: 13px 14px; display: flex; flex-direction: column; gap: 13px;
+}
+.bench-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+}
+.bench-head h2 {
+  margin: 0; font-size: 12px; font-weight: 600; letter-spacing: .13em; text-transform: uppercase;
+  color: hsl(var(--hue) 60% 64%);
+}
+.hint { font-family: var(--mono); font-size: 10.5px; color: var(--ink-faint); margin: 0; }
+
+.row { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
+.row + .row { border-top: 1px solid var(--line); padding-top: 12px; }
+.row-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .13em; text-transform: uppercase;
+  color: var(--ink-faint); width: 100%; margin: -2px 0 1px;
+}
+
+.tool {
+  display: inline-block;
+  font-family: var(--mono); font-size: 11px; letter-spacing: .06em;
+  background: var(--panel-hi); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 2px; padding: 7px 11px; cursor: pointer; transition: background .12s, border-color .12s;
+}
+.tool:hover { background: #272b3a; border-color: #343852; }
+.tool:active { background: var(--live); color: #0a0b11; }
+.tool[disabled] { opacity: .35; cursor: default; }
+.tool.lit { background: var(--live); color: #0a0b11; border-color: var(--live); }
+button:focus-visible, .ring-chip:focus-visible, label.file:focus-within { outline: 2px solid var(--live); outline-offset: 2px; }
+
+.stepper { display: flex; align-items: center; gap: 0; border: 1px solid var(--line); border-radius: 2px; overflow: hidden; }
+.stepper button { border: none; border-radius: 0; background: var(--panel-hi); padding: 7px 10px; }
+.stepper .n {
+  font-family: var(--mono); font-size: 11px; min-width: 52px; text-align: center; color: var(--ink);
+  font-variant-numeric: tabular-nums; padding: 0 4px;
+}
+
+label.file { display: inline-flex; cursor: pointer; }
+label.file .tool { cursor: pointer; }
+label.file input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+
+.morph { display: flex; align-items: center; gap: 10px; flex: 1 1 220px; min-width: 0; }
+.morph input[type=range] { flex: 1; min-width: 80px; }
+.morph .end {
+  font-family: var(--mono); font-size: 11px; letter-spacing: .1em; color: var(--ink-dim);
+}
+
+.kitname {
+  font-family: var(--mono); font-size: 11px; background: var(--panel-hi); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 2px; padding: 7px 9px; width: 130px; min-width: 0;
+}
+.kitname::placeholder { color: var(--ink-faint); }
+select.kits {
+  font-family: var(--mono); font-size: 11px; background: var(--panel-hi); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 2px; padding: 7px 9px; max-width: 160px;
+}
+
+.note { font-family: var(--mono); font-size: 10.5px; color: var(--ink-dim); margin: 0; min-height: 14px; }
+
+/* ---------- visual mode ---------- */
+.immerse {
+  position: fixed; inset: 0; background: #05060a; z-index: 40; display: grid; place-items: center;
+}
+.immerse canvas { width: min(96vw, 96vh); height: min(96vw, 96vh); touch-action: none; }
+.immerse .exit {
+  position: fixed; top: calc(14px + env(safe-area-inset-top, 0px));
+  right: calc(14px + env(safe-area-inset-right, 0px));
+  font-family: var(--mono); font-size: 10px; letter-spacing: .13em; text-transform: uppercase;
+  color: var(--ink-faint); background: none; border: none; cursor: pointer; padding: 8px;
+}
+
+footer { font-family: var(--mono); font-size: 10.5px; color: var(--ink-faint); line-height: 1.7; }
+footer b { color: var(--ink-dim); font-weight: 500; }
+
+@media (max-width: 560px) {
+  .rail { grid-template-columns: repeat(2, 1fr); }
+  .dial input[type=range] { width: 84px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Geometric Jelly <span>v0.1</span></h1>
+    <p class="tagline">rhythm has shape &middot; shape can be played</p>
+  </header>
+
+  <div class="transport">
+    <button class="play" id="play" aria-label="Play">
+      <svg id="playIcon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4l13 8-13 8z"/></svg>
+    </button>
+    <div class="dial">
+      <label for="bpm">Tempo</label>
+      <input type="range" id="bpm" min="48" max="190" step="1" value="104">
+      <span class="val" id="bpmVal">104 BPM</span>
+    </div>
+    <div class="dial">
+      <label for="swing">Swing</label>
+      <input type="range" id="swing" min="0" max="0.62" step="0.01" value="0.14">
+      <span class="val" id="swingVal">14%</span>
+    </div>
+    <div class="dial">
+      <label for="space">Space</label>
+      <input type="range" id="space" min="0" max="0.7" step="0.01" value="0.22">
+      <span class="val" id="spaceVal">22%</span>
+    </div>
+    <button class="tool" id="immerseBtn" style="margin-left:auto">Visual mode</button>
+  </div>
+
+  <div class="stage">
+    <canvas id="stage"></canvas>
+    <div class="readout">
+      <div class="big" id="roName">Kick</div>
+      <div class="sub" id="roMeta">16 steps &middot; 4 hits</div>
+    </div>
+  </div>
+
+  <div class="rail" id="rail"></div>
+
+  <div class="bench" id="bench">
+    <div class="bench-head">
+      <h2 id="benchName">Kick</h2>
+      <p class="hint">Tap a node to turn it on. Drag it in or out for velocity.</p>
+    </div>
+
+    <div class="row">
+      <span class="row-label">Shape</span>
+      <button class="tool" data-act="rotl">&#8592; Rotate</button>
+      <button class="tool" data-act="rotr">Rotate &#8594;</button>
+      <button class="tool" data-act="mirror">Mirror</button>
+      <button class="tool" data-act="contract">Contract</button>
+      <button class="tool" data-act="expand">Expand</button>
+      <button class="tool" data-act="thin">Simplify</button>
+    </div>
+
+    <div class="row">
+      <span class="row-label">Generate</span>
+      <div class="stepper">
+        <button class="tool" data-act="eucMinus" aria-label="Fewer hits">&minus;</button>
+        <span class="n" id="eucN">4 of 16</span>
+        <button class="tool" data-act="eucPlus" aria-label="More hits">+</button>
+      </div>
+      <button class="tool" data-act="euclid">Euclid</button>
+      <div class="stepper">
+        <button class="tool" data-act="lenMinus" aria-label="Shorter ring">&minus;</button>
+        <span class="n" id="lenN">16 steps</span>
+        <button class="tool" data-act="lenPlus" aria-label="Longer ring">+</button>
+      </div>
+      <button class="tool" data-act="random">Scatter</button>
+      <button class="tool" data-act="clear">Clear</button>
+      <button class="tool" data-act="undo" id="undoBtn" disabled>Undo</button>
+    </div>
+
+    <div class="row">
+      <span class="row-label">Scene morph</span>
+      <button class="tool" data-act="capA">Hold A</button>
+      <div class="morph">
+        <span class="end">A</span>
+        <input type="range" id="morph" min="0" max="1" step="0.01" value="0" disabled>
+        <span class="end">B</span>
+      </div>
+      <button class="tool" data-act="capB">Hold B</button>
+    </div>
+
+    <div class="row">
+      <span class="row-label">Sound</span>
+      <button class="tool" data-act="mic" id="micBtn">Record voice</button>
+      <label class="file tabindex">
+        <span class="tool" role="button" tabindex="0">Import audio</span>
+        <input type="file" id="fileIn" accept="audio/*">
+      </label>
+      <button class="tool" data-act="revert" id="revertBtn" disabled>Back to drum</button>
+      <button class="tool" data-act="audition">Audition</button>
+    </div>
+
+    <div class="row">
+      <span class="row-label">Patterns</span>
+      <input class="kitname" id="kitName" placeholder="name this kit" maxlength="24">
+      <button class="tool" data-act="save">Save</button>
+      <select class="kits" id="kitList" aria-label="Saved patterns"><option value="">Saved patterns&hellip;</option></select>
+      <button class="tool" data-act="load">Load</button>
+      <button class="tool" data-act="del">Delete</button>
+    </div>
+
+    <p class="note" id="note"></p>
+  </div>
+
+  <footer>
+    <b>Built from two parents.</b> The lookahead scheduler and the circle-of-fifths hue wheel come from Harmonia; the offline PCM handling, trim-and-normalize and generated reverb come from Lull v2. Every sound here is synthesised — no audio files.<br>
+    <b>Keys.</b> Space play &middot; 1&ndash;4 select ring &middot; M mute &middot; [ ] rotate &middot; V visual mode &middot; Esc exit.
+  </footer>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var TAU = Math.PI * 2;
+  var MAXLEN = 16;
+  var clamp = function (v, a, b) { return Math.min(b, Math.max(a, v)); };
+  var $ = function (id) { return document.getElementById(id); };
+
+  // ---------------------------------------------------------------- seeded rng (from Lull)
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  // ---------------------------------------------------------------- state
+  var RINGS = [
+    { name: 'Kick',  hue: 14,  voice: 'kick' },
+    { name: 'Snare', hue: 151, voice: 'snare' },
+    { name: 'Hat',   hue: 289, voice: 'hat' },
+    { name: 'Perc',  hue: 66,  voice: 'perc' }
+  ];
+
+  var rings = RINGS.map(function (r, i) {
+    return {
+      name: r.name, hue: r.hue, voice: r.voice, index: i,
+      len: 16,
+      vel: new Array(MAXLEN).fill(0),   // 0 = step off, >0 = on at that velocity
+      euc: 4,
+      mute: false,
+      buffer: null,                      // imported or recorded sample, replaces the drum voice
+      sampleName: ''
+    };
+  });
+
+  // A seeded opening pattern, so the instrument is playable the moment it loads.
+  rings[0].vel[0] = 1; rings[0].vel[6] = 0.62; rings[0].vel[10] = 0.85;
+  rings[1].vel[4] = 0.92; rings[1].vel[12] = 0.92; rings[1].vel[14] = 0.4;
+  rings[2].len = 12;
+  [0, 3, 6, 9].forEach(function (i) { rings[2].vel[i] = 0.5; });
+  rings[2].vel[0] = 0.75;
+  rings[3].len = 7;
+  rings[3].vel[0] = 0.7; rings[3].vel[4] = 0.45;
+
+  var sel = 0;
+  var playing = false;
+  var bpm = 104, swing = 0.14, space = 0.22;
+  var undoStack = [];
+  var sceneA = null, sceneB = null;
+
+  // ---------------------------------------------------------------- audio
+  var ac = null, master = null, comp = null, revSend = null, noiseBuf = null;
+  var startTime = 0, nextStepTime = 0, stepCount = 0, timer = null;
+  var LOOKAHEAD_MS = 25, SCHEDULE_AHEAD = 0.14;
+  var flashes = [];     // {ring, step, t} for the visual
+
+  function makeNoise(ctx) {
+    var n = Math.floor(ctx.sampleRate * 2);
+    var b = ctx.createBuffer(1, n, ctx.sampleRate);
+    var d = b.getChannelData(0);
+    var rand = mulberry32(7);
+    for (var i = 0; i < n; i++) d[i] = rand() * 2 - 1;
+    return b;
+  }
+
+  // Generated impulse response — the approach Lull uses so nothing has to ship as a file.
+  function makeIR(ctx, seconds) {
+    var n = Math.floor(ctx.sampleRate * seconds);
+    var b = ctx.createBuffer(2, n, ctx.sampleRate);
+    var rand = mulberry32(3);
+    for (var c = 0; c < 2; c++) {
+      var d = b.getChannelData(c);
+      for (var i = 0; i < n; i++) {
+        var t = i / n;
+        d[i] = (rand() * 2 - 1) * Math.pow(1 - t, 2.6) * (1 - Math.exp(-i / 240));
+      }
+    }
+    return b;
+  }
+
+  function initAudio() {
+    if (ac) return true;
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) { note('This browser has no Web Audio support.'); return false; }
+    ac = new AC();
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
+    comp = ac.createDynamicsCompressor();
+    comp.threshold.value = -12; comp.knee.value = 14; comp.ratio.value = 5;
+    comp.attack.value = 0.004; comp.release.value = 0.18;
+    master = ac.createGain();
+    master.gain.value = 0.85;
+    master.connect(comp); comp.connect(ac.destination);
+
+    var conv = ac.createConvolver();
+    conv.buffer = makeIR(ac, 2.4);
+    revSend = ac.createGain();
+    revSend.gain.value = space;
+    revSend.connect(conv); conv.connect(master);
+
+    noiseBuf = makeNoise(ac);
+    return true;
+  }
+
+  function env(g, t, peak, attack, decay) {
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(peak, t + attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + attack + decay);
+  }
+
+  function out(node, t, dur, send) {
+    node.connect(master);
+    if (revSend && send) {
+      var s = ac.createGain();
+      s.gain.value = send;
+      node.connect(s); s.connect(revSend);
+      window.setTimeout(function () { try { s.disconnect(); } catch (e) {} }, (t + dur + 3 - ac.currentTime) * 1000);
+    }
+  }
+
+  function noiseSrc(t, dur) {
+    var s = ac.createBufferSource();
+    s.buffer = noiseBuf; s.loop = true;
+    s.start(t); s.stop(t + dur);
+    return s;
+  }
+
+  var VOICES = {
+    kick: function (t, v) {
+      var o = ac.createOscillator(), g = ac.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(148, t);
+      o.frequency.exponentialRampToValueAtTime(47, t + 0.085);
+      env(g, t, 0.95 * v, 0.003, 0.42);
+      o.connect(g); out(g, t, 0.45, 0.05);
+      o.start(t); o.stop(t + 0.5);
+      var c = ac.createOscillator(), cg = ac.createGain();
+      c.type = 'triangle'; c.frequency.value = 900;
+      env(cg, t, 0.2 * v, 0.001, 0.016);
+      c.connect(cg); cg.connect(master);
+      c.start(t); c.stop(t + 0.04);
+    },
+    snare: function (t, v) {
+      var n = noiseSrc(t, 0.3), bp = ac.createBiquadFilter(), g = ac.createGain();
+      bp.type = 'bandpass'; bp.frequency.value = 1750; bp.Q.value = 0.8;
+      env(g, t, 0.5 * v, 0.002, 0.17);
+      n.connect(bp); bp.connect(g); out(g, t, 0.2, 0.3);
+      [186, 331].forEach(function (f, i) {
+        var o = ac.createOscillator(), og = ac.createGain();
+        o.type = 'triangle'; o.frequency.value = f;
+        env(og, t, (i ? 0.16 : 0.26) * v, 0.002, 0.085);
+        o.connect(og); og.connect(master);
+        o.start(t); o.stop(t + 0.12);
+      });
+    },
+    hat: function (t, v) {
+      var n = noiseSrc(t, 0.14), hp = ac.createBiquadFilter(), g = ac.createGain();
+      hp.type = 'highpass'; hp.frequency.value = 7200;
+      var dec = 0.034 + (1 - v) * 0.012;
+      env(g, t, 0.34 * v, 0.001, dec);
+      n.connect(hp); hp.connect(g); out(g, t, 0.1, 0.12);
+    },
+    perc: function (t, v) {
+      var o = ac.createOscillator(), g = ac.createGain();
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(430, t);
+      o.frequency.exponentialRampToValueAtTime(306, t + 0.05);
+      env(g, t, 0.42 * v, 0.002, 0.14);
+      o.connect(g); out(g, t, 0.16, 0.34);
+      o.start(t); o.stop(t + 0.2);
+      var n = noiseSrc(t, 0.05), bp = ac.createBiquadFilter(), ng = ac.createGain();
+      bp.type = 'bandpass'; bp.frequency.value = 2600; bp.Q.value = 1.4;
+      env(ng, t, 0.16 * v, 0.001, 0.028);
+      n.connect(bp); bp.connect(ng); ng.connect(master);
+    }
+  };
+
+  function fire(ring, t, v) {
+    if (!ac) return;
+    if (ring.buffer) {
+      var s = ac.createBufferSource(), g = ac.createGain();
+      s.buffer = ring.buffer;
+      g.gain.setValueAtTime(v * 0.9, t);
+      s.connect(g); out(g, t, ring.buffer.duration, 0.2);
+      s.start(t);
+      return;
+    }
+    VOICES[ring.voice](t, v);
+  }
+
+  // ---------------------------------------------------------------- transport
+  function stepDur() { return 60 / bpm / 4; }
+
+  function scheduler() {
+    if (!playing) return;
+    while (nextStepTime < ac.currentTime + SCHEDULE_AHEAD) {
+      var g = stepCount;                                  // global 16th-note index
+      var sw = (g % 2 === 1) ? swing * 0.5 * stepDur() : 0;
+      var when = nextStepTime + sw;
+      for (var i = 0; i < rings.length; i++) {
+        var r = rings[i];
+        if (r.mute) continue;
+        var s = g % r.len;
+        var v = r.vel[s];
+        if (v > 0.001) {
+          fire(r, when, v);
+          flashes.push({ ring: i, step: s, t: when });
+        }
+      }
+      nextStepTime += stepDur();
+      stepCount++;
+    }
+  }
+
+  function play() {
+    if (!initAudio()) return;
+    if (ac.state === 'suspended') ac.resume();
+    playing = true;
+    stepCount = 0;
+    startTime = ac.currentTime + 0.06;
+    nextStepTime = startTime;
+    timer = window.setInterval(scheduler, LOOKAHEAD_MS);
+    scheduler();
+    setPlayUI(true);
+  }
+
+  function stop() {
+    playing = false;
+    if (timer) { window.clearInterval(timer); timer = null; }
+    flashes.length = 0;
+    setPlayUI(false);
+  }
+
+  function setPlayUI(on) {
+    $('play').classList.toggle('on', on);
+    $('play').setAttribute('aria-label', on ? 'Stop' : 'Play');
+    $('playIcon').innerHTML = on ? '<rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/>'
+                                 : '<path d="M7 4l13 8-13 8z"/>';
+  }
+
+  // ---------------------------------------------------------------- pattern edits
+  function snapshot() {
+    return rings.map(function (r) { return { len: r.len, vel: r.vel.slice(), euc: r.euc }; });
+  }
+  function pushUndo() {
+    undoStack.push(snapshot());
+    if (undoStack.length > 40) undoStack.shift();
+    $('undoBtn').disabled = false;
+  }
+  function restore(snap) {
+    snap.forEach(function (s, i) { rings[i].len = s.len; rings[i].vel = s.vel.slice(); rings[i].euc = s.euc; });
+  }
+
+  // Bjorklund-style Euclidean distribution: k hits spread as evenly as n steps allow.
+  function euclid(k, n) {
+    var out = new Array(n).fill(0);
+    if (k <= 0) return out;
+    if (k >= n) { return out.fill(1); }
+    // Even spread with a hit guaranteed on step 0, so the downbeat lands where it should.
+    for (var i = 0; i < n; i++) if (((i * k) % n) < k) out[i] = 1;
+    return out;
+  }
+
+  function act(what) {
+    var r = rings[sel];
+    var i;
+    switch (what) {
+      case 'rotl': case 'rotr': {
+        pushUndo();
+        var v = r.vel.slice(0, r.len);
+        if (what === 'rotl') v.push(v.shift()); else v.unshift(v.pop());
+        for (i = 0; i < r.len; i++) r.vel[i] = v[i];
+        break;
+      }
+      case 'mirror': {
+        pushUndo();
+        var m = new Array(MAXLEN).fill(0);
+        for (i = 0; i < r.len; i++) m[(r.len - i) % r.len] = r.vel[i];
+        r.vel = m;
+        break;
+      }
+      case 'contract':
+        pushUndo();
+        for (i = 0; i < r.len; i++) if (r.vel[i] > 0) r.vel[i] = Math.max(0, r.vel[i] - 0.14);
+        break;
+      case 'expand':
+        pushUndo();
+        for (i = 0; i < r.len; i++) if (r.vel[i] > 0) r.vel[i] = Math.min(1, r.vel[i] + 0.14);
+        break;
+      case 'thin': {
+        pushUndo();
+        var lowest = -1, lv = 2;
+        for (i = 0; i < r.len; i++) if (r.vel[i] > 0 && r.vel[i] < lv) { lv = r.vel[i]; lowest = i; }
+        if (lowest >= 0) r.vel[lowest] = 0;
+        break;
+      }
+      case 'eucMinus': r.euc = clamp(r.euc - 1, 0, r.len); break;
+      case 'eucPlus':  r.euc = clamp(r.euc + 1, 0, r.len); break;
+      case 'euclid': {
+        pushUndo();
+        var e = euclid(r.euc, r.len);
+        for (i = 0; i < MAXLEN; i++) r.vel[i] = (i < r.len && e[i]) ? (i === 0 ? 0.95 : 0.7) : 0;
+        break;
+      }
+      case 'lenMinus': pushUndo(); r.len = clamp(r.len - 1, 2, MAXLEN); r.euc = clamp(r.euc, 0, r.len); break;
+      case 'lenPlus':  pushUndo(); r.len = clamp(r.len + 1, 2, MAXLEN); break;
+      case 'random': {
+        pushUndo();
+        var rand = mulberry32((Date.now() & 0xffff) + sel * 977);
+        for (i = 0; i < MAXLEN; i++) {
+          r.vel[i] = (i < r.len && rand() < 0.34) ? 0.45 + rand() * 0.5 : 0;
+        }
+        if (r.vel.every(function (x) { return x === 0; })) r.vel[0] = 0.8;
+        break;
+      }
+      case 'clear': pushUndo(); r.vel = new Array(MAXLEN).fill(0); break;
+      case 'undo':
+        if (undoStack.length) { restore(undoStack.pop()); $('undoBtn').disabled = !undoStack.length; }
+        break;
+      case 'capA': sceneA = snapshot(); note('Scene A held.'); enableMorph(); break;
+      case 'capB': sceneB = snapshot(); note('Scene B held.'); enableMorph(); break;
+      case 'audition':
+        if (!initAudio()) break;
+        if (ac.state === 'suspended') ac.resume();
+        fire(r, ac.currentTime + 0.02, 0.9);
+        break;
+      case 'revert':
+        r.buffer = null; r.sampleName = '';
+        note(r.name + ' is back to its drum voice.');
+        break;
+      case 'mic': startMic(); break;
+      case 'save': saveKit(); break;
+      case 'load': loadKit(); break;
+      case 'del': deleteKit(); break;
+    }
+    render();
+  }
+
+  function enableMorph() {
+    $('morph').disabled = !(sceneA && sceneB);
+  }
+
+  // Morph interpolates velocity per step; a step sounds once its interpolated velocity clears
+  // the floor, so hits fade in and out rather than switching on at the halfway point.
+  function applyMorph(t) {
+    if (!sceneA || !sceneB) return;
+    rings.forEach(function (r, i) {
+      var a = sceneA[i], b = sceneB[i];
+      r.len = t < 0.5 ? a.len : b.len;
+      for (var s = 0; s < MAXLEN; s++) {
+        var v = a.vel[s] * (1 - t) + b.vel[s] * t;
+        r.vel[s] = v > 0.09 ? v : 0;
+      }
+    });
+    render();
+  }
+
+  // ---------------------------------------------------------------- sampling
+  var SR_STORE = 48000;
+
+  // Trim, de-DC and normalise — Lull's cleanUp, so a phone recording lands usable.
+  function cleanUp(pcm, sr) {
+    var i, mean = 0;
+    for (i = 0; i < pcm.length; i++) mean += pcm[i];
+    mean /= pcm.length || 1;
+    var x = new Float32Array(pcm.length);
+    for (i = 0; i < pcm.length; i++) x[i] = pcm[i] - mean;
+    var win = Math.round(sr * 0.02), rms = [];
+    for (i = 0; i < x.length; i += win) {
+      var s = 0, e = Math.min(x.length, i + win);
+      for (var j = i; j < e; j++) s += x[j] * x[j];
+      rms.push(Math.sqrt(s / (e - i)));
+    }
+    var maxR = 0;
+    for (i = 0; i < rms.length; i++) if (rms[i] > maxR) maxR = rms[i];
+    if (maxR < 1e-4) return null;
+    var thr = maxR * 0.0158, a = -1, b = -1;
+    for (i = 0; i < rms.length; i++) if (rms[i] > thr) { a = i; break; }
+    for (i = rms.length - 1; i >= 0; i--) if (rms[i] > thr) { b = i; break; }
+    if (a < 0) return null;
+    var margin = Math.round((0.02 * sr) / win);
+    a = Math.max(0, a - margin); b = Math.min(rms.length - 1, b + margin);
+    var y = x.slice(a * win, Math.min(x.length, (b + 1) * win));
+    var pk = 0;
+    for (i = 0; i < y.length; i++) pk = Math.max(pk, Math.abs(y[i]));
+    var g = 0.89 / (pk || 1), fade = Math.round(sr * 0.004);
+    for (i = 0; i < y.length; i++) {
+      var f = 1;
+      if (i < fade) f = i / fade;
+      else if (i > y.length - fade) f = (y.length - i) / fade;
+      y[i] *= g * f;
+    }
+    return y;
+  }
+
+  function toBuffer(f32, sr) {
+    var b = ac.createBuffer(1, f32.length, sr);
+    b.getChannelData(0).set(f32);
+    return b;
+  }
+
+  function adoptPCM(mono, sr, label) {
+    var cleaned = cleanUp(mono, sr) || mono;
+    // Hold one shot at a sensible length; anything longer gets trimmed to 2.5s.
+    var maxN = Math.floor(sr * 2.5);
+    if (cleaned.length > maxN) cleaned = cleaned.slice(0, maxN);
+    var r = rings[sel];
+    r.buffer = toBuffer(cleaned, sr);
+    r.sampleName = label;
+    note(label + ' loaded into ' + r.name + ' (' + (cleaned.length / sr).toFixed(2) + 's).');
+    render();
+  }
+
+  $('fileIn').addEventListener('change', function (e) {
+    var f = e.target.files && e.target.files[0];
+    if (!f) return;
+    if (!initAudio()) return;
+    var fr = new FileReader();
+    fr.onload = function () {
+      ac.decodeAudioData(fr.result).then(function (audio) {
+        var n = audio.length, mono = new Float32Array(n);
+        for (var c = 0; c < audio.numberOfChannels; c++) {
+          var d = audio.getChannelData(c);
+          for (var i = 0; i < n; i++) mono[i] += d[i] / audio.numberOfChannels;
+        }
+        adoptPCM(mono, audio.sampleRate, f.name.replace(/\.[^.]+$/, ''));
+      }).catch(function () { note('That file could not be decoded.'); });
+    };
+    fr.readAsArrayBuffer(f);
+    e.target.value = '';
+  });
+
+  // Microphone. Published artifacts are refused the mic without a prompt, so this
+  // degrades cleanly here and works when the file is hosted as its own page.
+  var recState = null;
+  function startMic() {
+    if (recState) { stopMic(); return; }
+    if (!initAudio()) return;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      note('No microphone API in this browser. Use Import audio.');
+      return;
+    }
+    note('Asking for the microphone…');
+    navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } })
+      .then(function (stream) {
+        var src = ac.createMediaStreamSource(stream);
+        var proc = ac.createScriptProcessor(4096, 1, 1);
+        var sink = ac.createGain(); sink.gain.value = 0;
+        var chunks = [];
+        proc.onaudioprocess = function (ev) {
+          if (recState) chunks.push(new Float32Array(ev.inputBuffer.getChannelData(0)));
+        };
+        src.connect(proc); proc.connect(sink); sink.connect(ac.destination);
+        recState = { stream: stream, proc: proc, src: src, sink: sink, chunks: chunks, t0: Date.now() };
+        $('micBtn').classList.add('lit');
+        $('micBtn').textContent = 'Stop ●';
+        note('Recording into ' + rings[sel].name + '. Tap again to stop.');
+        window.setTimeout(function () { if (recState) stopMic(); }, 6000);
+      })
+      .catch(function () {
+        note('The microphone is blocked here. Import an audio file instead, or run this page on your own site.');
+      });
+  }
+
+  function stopMic() {
+    if (!recState) return;
+    var rs = recState; recState = null;
+    $('micBtn').classList.remove('lit');
+    $('micBtn').textContent = 'Record voice';
+    try { rs.proc.disconnect(); rs.src.disconnect(); rs.sink.disconnect(); } catch (e) {}
+    rs.stream.getTracks().forEach(function (t) { t.stop(); });
+    var total = rs.chunks.reduce(function (n, c) { return n + c.length; }, 0);
+    if (!total) { note('Nothing was recorded.'); return; }
+    var mono = new Float32Array(total), o = 0;
+    rs.chunks.forEach(function (c) { mono.set(c, o); o += c.length; });
+    adoptPCM(mono, ac.sampleRate, 'Voice');
+  }
+
+  // ---------------------------------------------------------------- saved patterns
+  var LS_KEY = 'geometricjelly.kits';
+  function readKits() {
+    try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch (e) { return {}; }
+  }
+  function writeKits(k) {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(k)); } catch (e) { note('This browser will not save patterns.'); }
+  }
+  function refreshKits() {
+    var k = readKits(), sel2 = $('kitList');
+    var keep = sel2.value;
+    sel2.innerHTML = '<option value="">Saved patterns…</option>';
+    Object.keys(k).sort().forEach(function (n) {
+      var o = document.createElement('option');
+      o.value = n; o.textContent = n;
+      sel2.appendChild(o);
+    });
+    if (k[keep]) sel2.value = keep;
+  }
+  function saveKit() {
+    var n = ($('kitName').value || '').trim();
+    if (!n) { note('Give the pattern a name first.'); return; }
+    var k = readKits();
+    k[n] = { bpm: bpm, swing: swing, space: space, rings: snapshot() };
+    writeKits(k); refreshKits();
+    $('kitList').value = n;
+    note('Saved as "' + n + '".');
+  }
+  function loadKit() {
+    var n = $('kitList').value, k = readKits();
+    if (!n || !k[n]) { note('Pick a saved pattern first.'); return; }
+    pushUndo();
+    restore(k[n].rings);
+    bpm = k[n].bpm; swing = k[n].swing; space = k[n].space;
+    $('bpm').value = bpm; $('swing').value = swing; $('space').value = space;
+    if (revSend) revSend.gain.value = space;
+    $('kitName').value = n;
+    note('Loaded "' + n + '".');
+  }
+  function deleteKit() {
+    var n = $('kitList').value, k = readKits();
+    if (!n || !k[n]) { note('Pick a saved pattern first.'); return; }
+    delete k[n]; writeKits(k); refreshKits();
+    note('Deleted "' + n + '".');
+  }
+
+  function note(t) { $('note').textContent = t || ''; }
+
+  // ---------------------------------------------------------------- drawing
+  var cv = $('stage'), ctx = cv.getContext('2d');
+  var imCv = null, imCtx = null, immersed = false;
+
+  function sizeCanvas(c) {
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var w = c.clientWidth || 400;
+    if (c.width !== Math.round(w * dpr)) {
+      c.width = Math.round(w * dpr);
+      c.height = Math.round(w * dpr);
+    }
+    return c.width;
+  }
+
+  function ringRadius(i, R, n) {
+    // Outermost ring is the selected one's neighbourhood; evenly spaced bands.
+    return R * (0.42 + 0.58 * ((i + 1) / n));
+  }
+
+  function phaseOf(len) {
+    if (!playing || !ac) return 0;
+    var el = ac.currentTime - startTime;
+    if (el < 0) return 0;
+    return (el / (stepDur() * len)) % 1;
+  }
+
+  function draw(c, c2, opts) {
+    var W = sizeCanvas(c);
+    var cx = W / 2, cy = W / 2, R = W * 0.455;
+    var dpr = W / (c.clientWidth || W);
+    var big = !!opts.big;
+    c2.clearRect(0, 0, W, W);
+
+    var now = ac ? ac.currentTime : 0;
+    // retire old flashes
+    while (flashes.length && flashes[0].t < now - 1.2) flashes.shift();
+
+    for (var i = 0; i < rings.length; i++) {
+      var r = rings[i];
+      var isSel = (i === sel) && !big;
+      var rr = ringRadius(i, R, rings.length);
+      var band = R * 0.055;
+      var dim = r.mute ? 0.22 : (big ? 1 : (isSel ? 1 : 0.46));
+      var hue = r.hue;
+
+      // base ring
+      c2.beginPath();
+      c2.arc(cx, cy, rr, 0, TAU);
+      c2.strokeStyle = 'hsla(' + hue + ', 32%, 56%, ' + (0.13 * dim) + ')';
+      c2.lineWidth = dpr;
+      c2.stroke();
+
+      // polygon through the active steps
+      var pts = [];
+      for (var s = 0; s < r.len; s++) {
+        if (r.vel[s] <= 0.001) continue;
+        var ang = -Math.PI / 2 + (s / r.len) * TAU;
+        var rad = rr + (r.vel[s] - 0.55) * band * 2;
+        pts.push([cx + Math.cos(ang) * rad, cy + Math.sin(ang) * rad, s, r.vel[s], ang, rad]);
+      }
+      if (pts.length > 1) {
+        c2.beginPath();
+        pts.forEach(function (p, k) { k ? c2.lineTo(p[0], p[1]) : c2.moveTo(p[0], p[1]); });
+        c2.closePath();
+        c2.strokeStyle = 'hsla(' + hue + ', 64%, 62%, ' + ((isSel || big ? 0.62 : 0.3) * dim) + ')';
+        c2.lineWidth = (isSel || big ? 1.7 : 1.1) * dpr;
+        c2.stroke();
+        c2.fillStyle = 'hsla(' + hue + ', 60%, 54%, ' + (0.07 * dim) + ')';
+        c2.fill();
+      }
+
+      // every seat on the ring, so the grid stays legible while editing
+      if (isSel || big) {
+        for (var q = 0; q < r.len; q++) {
+          if (r.vel[q] > 0.001) continue;
+          var a2 = -Math.PI / 2 + (q / r.len) * TAU;
+          c2.beginPath();
+          c2.arc(cx + Math.cos(a2) * rr, cy + Math.sin(a2) * rr, 1.9 * dpr, 0, TAU);
+          c2.fillStyle = 'hsla(' + hue + ', 24%, 60%, ' + (0.3 * dim) + ')';
+          c2.fill();
+        }
+      }
+
+      // active nodes
+      for (var p = 0; p < pts.length; p++) {
+        var P = pts[p];
+        var glow = 0;
+        for (var f = flashes.length - 1; f >= 0; f--) {
+          if (flashes[f].ring === i && flashes[f].step === P[2]) {
+            var age = now - flashes[f].t;
+            if (age >= 0 && age < 0.5) glow = Math.max(glow, 1 - age / 0.5);
+          }
+        }
+        var rad2 = (2.3 + 3.4 * P[3] + glow * 4.5) * dpr;
+        c2.save();
+        if (glow > 0.02) {
+          c2.shadowColor = 'hsla(' + hue + ', 92%, 68%, ' + glow + ')';
+          c2.shadowBlur = (10 + 22 * glow) * dpr;
+        }
+        c2.beginPath();
+        c2.arc(P[0], P[1], rad2, 0, TAU);
+        c2.fillStyle = 'hsla(' + hue + ', ' + (56 + 30 * glow) + '%, ' + (58 + 26 * glow) + '%, ' + clamp((0.72 + 0.28 * glow) * dim, 0, 1) + ')';
+        c2.fill();
+        c2.restore();
+
+        // ripple on strike
+        if (glow > 0.02 && (isSel || big)) {
+          c2.beginPath();
+          c2.arc(P[0], P[1], rad2 + (1 - glow) * R * 0.12, 0, TAU);
+          c2.strokeStyle = 'hsla(' + hue + ', 80%, 70%, ' + (glow * 0.3) + ')';
+          c2.lineWidth = dpr;
+          c2.stroke();
+        }
+      }
+
+      // this ring's own playhead — rings of different length run at different angular speeds
+      var ph = phaseOf(r.len);
+      var pa = -Math.PI / 2 + ph * TAU;
+      c2.beginPath();
+      c2.arc(cx + Math.cos(pa) * rr, cy + Math.sin(pa) * rr, 2.6 * dpr, 0, TAU);
+      c2.fillStyle = 'rgba(244, 241, 234, ' + (playing ? 0.85 * dim : 0.18 * dim) + ')';
+      c2.fill();
+      if (playing && (isSel || big)) {
+        c2.beginPath();
+        c2.moveTo(cx + Math.cos(pa) * (rr - band * 1.3), cy + Math.sin(pa) * (rr - band * 1.3));
+        c2.lineTo(cx + Math.cos(pa) * (rr + band * 1.3), cy + Math.sin(pa) * (rr + band * 1.3));
+        c2.strokeStyle = 'rgba(244, 241, 234, ' + (0.3 * dim) + ')';
+        c2.lineWidth = dpr;
+        c2.stroke();
+      }
+    }
+
+    // downbeat marker at the top
+    c2.beginPath();
+    c2.moveTo(cx, cy - R * 1.035);
+    c2.lineTo(cx, cy - R * 0.955);
+    c2.strokeStyle = 'rgba(232, 230, 239, 0.3)';
+    c2.lineWidth = 1.4 * dpr;
+    c2.stroke();
+  }
+
+  function frame() {
+    if (immersed && imCv) draw(imCv, imCtx, { big: true });
+    else draw(cv, ctx, {});
+    requestAnimationFrame(frame);
+  }
+
+  // ---------------------------------------------------------------- pointer editing
+  var drag = null;
+
+  function hit(ev) {
+    var rect = cv.getBoundingClientRect();
+    var x = (ev.clientX - rect.left) / rect.width;
+    var y = (ev.clientY - rect.top) / rect.width;
+    var cx = 0.5, cy = 0.5, R = 0.455;
+    var dx = x - cx, dy = y - cy;
+    var dist = Math.sqrt(dx * dx + dy * dy);
+    var ang = Math.atan2(dy, dx) + Math.PI / 2;
+    if (ang < 0) ang += TAU;
+
+    // which ring band
+    var best = -1, bestD = 1e9;
+    for (var i = 0; i < rings.length; i++) {
+      var rr = ringRadius(i, R, rings.length);
+      var d = Math.abs(dist - rr);
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    if (best < 0 || bestD > R * 0.1) return null;
+    var r = rings[best];
+    var step = Math.round((ang / TAU) * r.len) % r.len;
+    return { ring: best, step: step, dist: dist, R: R };
+  }
+
+  cv.addEventListener('pointerdown', function (ev) {
+    var h = hit(ev);
+    if (!h) return;
+    cv.setPointerCapture(ev.pointerId);
+    if (h.ring !== sel) { sel = h.ring; render(); }
+    var r = rings[sel];
+    pushUndo();
+    if (r.vel[h.step] > 0.001) {
+      drag = { step: h.step, moved: false, startDist: h.dist, startVel: r.vel[h.step], turnedOn: false };
+    } else {
+      r.vel[h.step] = 0.75;
+      drag = { step: h.step, moved: false, startDist: h.dist, startVel: 0.75, turnedOn: true };
+      if (ac && !playing) { if (ac.state === 'suspended') ac.resume(); fire(r, ac.currentTime + 0.01, 0.75); }
+    }
+    render();
+    ev.preventDefault();
+  });
+
+  cv.addEventListener('pointermove', function (ev) {
+    if (!drag) return;
+    var h = hit(ev);
+    if (!h) return;
+    var delta = (h.dist - drag.startDist) / (0.455 * 0.11);
+    if (Math.abs(delta) > 0.12) drag.moved = true;
+    if (drag.moved) {
+      rings[sel].vel[drag.step] = clamp(drag.startVel + delta * 0.5, 0.08, 1);
+      render();
+    }
+  });
+
+  function endDrag(ev) {
+    if (!drag) return;
+    // a tap on a live node turns it off; a drag only changed its velocity
+    if (!drag.moved && !drag.turnedOn) rings[sel].vel[drag.step] = 0;
+    drag = null;
+    render();
+    if (ev) { try { cv.releasePointerCapture(ev.pointerId); } catch (e) {} }
+  }
+  cv.addEventListener('pointerup', endDrag);
+  cv.addEventListener('pointercancel', endDrag);
+
+  // ---------------------------------------------------------------- ui wiring
+  function render() {
+    var r = rings[sel];
+    var hits = r.vel.slice(0, r.len).filter(function (v) { return v > 0.001; }).length;
+
+    $('roName').textContent = r.sampleName ? r.name + ' — ' + r.sampleName : r.name;
+    $('roMeta').textContent = r.len + ' steps · ' + hits + (hits === 1 ? ' hit' : ' hits');
+    $('benchName').textContent = r.name;
+    $('bench').style.setProperty('--hue', r.hue);
+    $('eucN').textContent = r.euc + ' of ' + r.len;
+    $('lenN').textContent = r.len + ' steps';
+    $('revertBtn').disabled = !r.buffer;
+    $('undoBtn').disabled = !undoStack.length;
+
+    var rail = $('rail');
+    if (rail.childElementCount !== rings.length) {
+      rail.innerHTML = '';
+      rings.forEach(function (rr, i) {
+        var b = document.createElement('button');
+        b.className = 'ring-chip';
+        b.type = 'button';
+        b.innerHTML = '<span class="nm"></span><span class="meta"></span>';
+        b.addEventListener('click', function (ev) {
+          if (ev.shiftKey) { rr.mute = !rr.mute; } else if (i === sel) { rr.mute = !rr.mute; } else { sel = i; }
+          render();
+        });
+        rail.appendChild(b);
+      });
+    }
+    Array.prototype.forEach.call(rail.children, function (b, i) {
+      var rr = rings[i];
+      var n = rr.vel.slice(0, rr.len).filter(function (v) { return v > 0.001; }).length;
+      b.style.setProperty('--hue', rr.hue);
+      b.setAttribute('aria-pressed', String(i === sel));
+      b.classList.toggle('muted', rr.mute);
+      b.querySelector('.nm').textContent = rr.name;
+      b.querySelector('.meta').textContent = n + '/' + rr.len + (rr.buffer ? ' · smp' : '');
+      b.title = (i === sel ? 'Tap again to mute' : 'Select') + ' — shift-click to mute';
+    });
+  }
+
+  document.querySelectorAll('[data-act]').forEach(function (b) {
+    b.addEventListener('click', function () { act(b.getAttribute('data-act')); });
+  });
+
+  $('play').addEventListener('click', function () { playing ? stop() : play(); });
+
+  $('bpm').addEventListener('input', function (e) {
+    bpm = +e.target.value; $('bpmVal').textContent = bpm + ' BPM';
+  });
+  $('swing').addEventListener('input', function (e) {
+    swing = +e.target.value; $('swingVal').textContent = Math.round(swing * 100) + '%';
+  });
+  $('space').addEventListener('input', function (e) {
+    space = +e.target.value; $('spaceVal').textContent = Math.round(space * 100) + '%';
+    if (revSend) revSend.gain.value = space;
+  });
+  $('morph').addEventListener('input', function (e) { applyMorph(+e.target.value); });
+
+  document.querySelector('label.file span').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('fileIn').click(); }
+  });
+
+  // visual mode
+  function enterImmerse() {
+    if (immersed) return;
+    immersed = true;
+    var d = document.createElement('div');
+    d.className = 'immerse';
+    d.id = 'immerse';
+    imCv = document.createElement('canvas');
+    d.appendChild(imCv);
+    var x = document.createElement('button');
+    x.className = 'exit'; x.textContent = 'Exit';
+    x.addEventListener('click', exitImmerse);
+    d.appendChild(x);
+    d.addEventListener('dblclick', exitImmerse);
+    document.body.appendChild(d);
+    imCtx = imCv.getContext('2d');
+    if (navigator.wakeLock) { navigator.wakeLock.request('screen').catch(function () {}); }
+  }
+  function exitImmerse() {
+    if (!immersed) return;
+    immersed = false;
+    var d = $('immerse');
+    if (d) d.remove();
+    imCv = null; imCtx = null;
+  }
+  $('immerseBtn').addEventListener('click', enterImmerse);
+
+  document.addEventListener('keydown', function (e) {
+    if (e.target && /input|select|textarea/i.test(e.target.tagName)) return;
+    var k = e.key;
+    if (k === ' ') { e.preventDefault(); playing ? stop() : play(); }
+    else if (k >= '1' && k <= '4') { sel = +k - 1; render(); }
+    else if (k === 'm' || k === 'M') { rings[sel].mute = !rings[sel].mute; render(); }
+    else if (k === '[') act('rotl');
+    else if (k === ']') act('rotr');
+    else if (k === 'v' || k === 'V') enterImmerse();
+    else if (k === 'Escape') exitImmerse();
+  });
+
+  window.addEventListener('resize', function () { /* canvas resizes itself each frame */ });
+
+  // ---------------------------------------------------------------- go
+  refreshKits();
+  render();
+  requestAnimationFrame(frame);
+  note('Press play, then drag the nodes around.');
+})();
+</script>
