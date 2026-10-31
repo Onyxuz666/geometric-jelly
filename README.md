@@ -1,66 +1,87 @@
 # Geometric Jelly
 
-A circular drum machine where the rhythm *is* a polygon. Sixteen seats around a ring; the steps you switch on become the vertices of a shape, and that shape is the thing you edit — rotate it, mirror it, pull a vertex in or out, morph it into another shape. Four rings play at once, and each can have its own length, so they drift in and out of phase while you watch.
+A drum machine on the Tonnetz torus. Join the 12 pitch classes by fifths and major thirds and the lattice closes into a torus whose every edge is a consonance and every face a major or minor triad. Each layer of the drum machine is a closed orbit on that surface — a (p, q) torus knot — and every strike tunes a resonator to the vertex it lands on. p against q is the polyrhythm.
 
-No build step, no audio files, no dependencies. Open `index.html` in a browser, or run `python3 -m http.server`.
+Flatten the torus and it unrolls into a ring drum machine: same data, same state, two readings.
+
+No build step, no audio files. Everything is synthesised in the Web Audio API. three.js (pinned, from jsDelivr) is the one dependency.
+
+```bash
+python3 -m http.server
+```
+
+Then open http://localhost:8000. It must be served, not opened as a file, because it uses ES modules.
 
 ## Playing it
 
-- **Tap a node** to turn a step on or off. **Drag it in or out** to set its velocity.
-- **Rings** are the four coloured chips below the circle. Tap one to select it; tap the selected one again (or shift-click any) to mute it.
-- Each ring carries its own playhead dot. Set two rings to different lengths and the dots separate — that is the polyrhythm, visible.
-- Keys: `Space` play · `1`–`4` select a ring · `M` mute · `[` `]` rotate · `V` visual mode · `Esc` exit.
+- **Layers** are the five chips under the stage: Kick, Snare, Hat, Perc, Bell. Only these change the selected layer; touching the shape never does. `M` and `S` on each chip mute and solo.
+- **On the shape** (selected layer only): tap a node to toggle it, tap an empty seat to add one. Drag a node along the orbit to move it (it snaps to steps), outward to set velocity, onto a neighbouring torus vertex to re-pitch it, or well off the ring to delete it. Drag empty space to rotate the view.
+- **Torus ↔ Ring** slider morphs continuously between the two views. Phones open on the ring.
+- **Visual** hides the controls, goes full screen and holds a wake lock.
+- **Step strip** under the layer name edits velocity, probability, flams, ratchets (×1–×4), and shows each step's pitch.
+- Keys: `Space` play · `1`–`5` layer · `M` mute · `S` solo · `[` `]` rotate · `F` flatten · `V` visual · `Esc` exit.
 
-## Geometry as the editing language
+## Rhythm
 
-| Control | What it does to the shape | What you hear |
-|---|---|---|
-| Rotate | turns the polygon one seat | phase shift, displaced groove |
-| Mirror | reflects it | retrograde rhythm |
-| Contract / Expand | pulls vertices toward or away from the ring | quieter or harder hits |
-| Simplify | drops the weakest vertex | rhythm reduction |
-| Euclid | places *k* hits as evenly as *n* seats allow | tresillo, cinquillo, bembé |
-| Scene morph | interpolates every ring between two held states | hits fade in and out rather than switching at the halfway point |
+A layer has `len` steps spread over a cycle of `span` sixteenths. 16 over 16 is an ordinary bar of 16ths; 7 over 7 against 16 over 16 is a polymeter; 3 over 16 against 2 over 16 is a 3:2 polyrhythm in one bar. The readout top-right counts down to the next point where every sounding layer starts its cycle together.
 
-The Euclidean generator uses `(i · k) mod n < k`, which guarantees a hit on step 0 — so E(3,8) comes out as the tresillo `10010010` rather than one of its rotations.
+All timing comes off one master clock on `AudioContext.currentTime` with a 25 ms / 120 ms lookahead scheduler. Each layer's position is derived from that clock rather than accumulated, so nothing drifts and edits land on the grid immediately.
 
-### The radius conflict, and how it is resolved
+Drummer controls: swing (50% straight to 75%, on the off-16ths), humanize, per-step probability (seeded, so a pattern repeats exactly), flams, ratchets, seeded variation that drops and softens hits over a 4-cycle phrase, and choke groups.
 
-The original brief wanted radius to mean velocity *and* concentric rings to mean instruments. Those collide. Here each ring owns a base radius, and velocity moves a node within a narrow band around it. You keep both readings, and dragging radially still feels like what it does.
+**Phasing**: up to four copies of a layer, each running slightly slower than the last, drift apart and back together — Reich's *Drumming* on a drum layer.
+
+**Knot rhythm** fills the layer with the hits a (p, q) knot makes crossing its meridian (p per cycle) and its longitude (q per cycle), accenting where they coincide. When gcd(p, q) > 1 the orbit is a link of several loops and each loop sounds its own pitch.
+
+**Drift** precesses the orbit around the fifth-axis by a set fraction of a step each cycle: the rhythm stays locked, the pitches wander and come home. It defaults to 0.
+
+**Face mode** locks a layer to one triangle — a three-note arpeggio of that triad. P, L and R move it to a neighbouring face (C → Cm, Em, Am). A walk such as `LR` applies one move per cycle, so a chord progression is an orbit edit.
+
+### Presets
+
+Four on the floor · son clave 3-2 and 2-3 · rumba clave 3-2 and 2-3 · bossa nova · songo · jazz swing ride · shuffle · half-time shuffle · Afro 6/8 bell · tresillo · polyrhythm 3:2, 3:4, 5:4, 7:8 · polymeter 16/7/5 · phase study · trefoil (3, 2) knot · PLR walk.
+
+The Afro-Cuban and shuffle patterns are reasonable starting points written on a grid, not transcriptions; adjust to taste.
 
 ## Sound
 
-Every voice is synthesised in the Web Audio API at play time:
+Each strike is an **excitation into a resonator bank**:
 
-- **Kick** — sine, 148 Hz dropping to 47 Hz over 85 ms, plus a short triangle click.
-- **Snare** — band-passed noise at 1.75 kHz over two detuned triangles.
-- **Hat** — noise through a 7.2 kHz high-pass, decay shortening with velocity.
-- **Perc** — triangle falling 430→306 Hz with a band-passed noise transient.
-- **Space** — a convolution reverb whose impulse response is generated from seeded noise on startup.
+- **Excitation** — the layer's synthesised drum (kick, snare, hat, perc), a short burst shaped by its *character* (skin, stick, glass, bell, mallet), or a recording.
+- **Resonators** — band-pass filters tuned to the struck pitch class and the character's partials (membrane modes for skin, free-bar modes for stick, Lull's partial tables for glass, bell and mallet).
+- **Body** moves one voice from dry kit (resonator barely there) through tuned percussion to struck bell (resonator dominant, long ring).
 
-Any ring's drum voice can be replaced by a recording or an imported file. Imported audio is trimmed, de-DC'd and normalised before it is used, then capped at 2.5 s.
+Per layer: ring, resonator feedback (the shell rings into itself), attack and sustain shaping, tape speed (pitch and time together), brightness, tempo-synced filter sweep, bit and sample-rate reduction, level, pan, echo and reverb sends.
 
-## Microphone
+Bus: convolution reverb from a generated impulse, tempo-synced ping-pong echo, and an optional just-intonation drone whose partials swell at rates taken from the active polyrhythm.
 
-`Record voice` uses `getUserMedia` and works when this page is served from its own origin — GitHub Pages, Netlify, a local server, or added to an iPhone home screen. Published Claude artifacts are refused microphone access, so there the button reports that and you should use `Import audio` instead.
+Voices are capped (20 on touch devices, 48 elsewhere); the oldest is released when the cap is reached.
+
+## Recordings
+
+**Record** (4 s, needs a page served from its own origin) or **Import** an audio file into the selected layer. It is trimmed, de-DC'd and normalised, then becomes that layer's excitation: dry at low Body, ringing the tuned resonators as Body rises. Recordings are kept in IndexedDB on the device and never uploaded. Share links carry the pattern, not the recordings.
+
+## Tests
+
+```bash
+node tests/tonnetz.test.mjs
+```
+
+Checks the torus census (12 vertices, 36 edges, 24 faces, χ = 0, only fifths and thirds as edges), that every face is a triad, the PLR moves, that link loops are distinct, and the Euclid and knot rhythms.
 
 ## Hosting on GitHub Pages
 
-Push, then **Settings → Pages → Deploy from a branch**, `main` / `(root)`. `.nojekyll` is already in place. `index.html` must stay at the root.
+**Settings → Pages → Deploy from a branch**, `main` / `(root)`. `.nojekyll` is in place.
 
 ## Where it came from
 
-Two parents, both single-page vanilla-JS web audio apps:
+- [**Lull v2**](https://github.com/Onyxuz666/Lull-v2) — `cleanUp`, `makeIRData`, `makeNoiseData`, `mulberry32`, `warmthHz`, the `TONES` and `CHORDS` tables, `fieldRates`, `droneAmps` (in `js/lull.js`, changes marked), the IndexedDB store, the ping-pong echo topology and the phasing copies.
+- [**Harmonia**](https://github.com/ahhh/Harmonia) — the lookahead scheduler shape and hue-from-wheel-position.
 
-- [**Lull v2**](https://github.com/Onyxuz666/Lull-v2) — the offline PCM path (`cleanUp`: trim, de-DC, normalise, fade), the generated reverb impulse, the seeded `mulberry32` RNG, and the pattern of keeping every sound synthesised so nothing has to ship as a file.
-- [**Harmonia**](https://github.com/ahhh/Harmonia) — the lookahead scheduler (a 25 ms interval that schedules onto the audio clock, never a timer firing notes), and the circular canvas renderer: nodes around a ring, polygons drawn through them, hue assigned by position on the wheel.
+Not reused: Lull's `renderPulse` / `addNote` path, which renders a rhythm into a looping buffer and cannot be edited while playing.
 
-What did **not** transfer: Lull's rhythm layer pre-renders a whole cycle into a looping buffer, which is excellent for an ambient drone and wrong for a sequencer you edit while it plays. That part was rebuilt around Harmonia's scheduler instead.
-
-## Status
-
-v0.1 — the minimum playable instrument. Not yet built: two-deck DJ mode, live voice slicing around the circle, MIDI output, REAPER sync, and a sampler with per-step sample selection.
+The design is in [`docs/design-v2.md`](docs/design-v2.md); build decisions in [`docs/build-notes.md`](docs/build-notes.md).
 
 ## Licence
 
-Not set yet. Lull v2 and Harmonia both ship without a licence file, which means neither is open source by default — worth settling with the Harmonia author before this goes anywhere public.
+Not set yet. Lull v2 and Harmonia both ship without a licence file, so neither is open source by default — worth settling with the Harmonia author before this goes anywhere public.

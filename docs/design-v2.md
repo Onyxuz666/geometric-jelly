@@ -1,6 +1,6 @@
 # Geometric Jelly v2 — design spec
 
-Status: design settled, not yet implemented. This document is the brief for the v2 build.
+Status: implemented on the `v2` branch. See `build-notes.md` for how each open question in §8 was answered.
 v0.1 (the flat 16-step polygon sequencer) is on `main` at `79c0adb` and should be treated as a
 throwaway prototype, not a base to extend.
 

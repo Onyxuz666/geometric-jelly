@@ -1,5 +1,51 @@
 # Geometric Jelly: build notes
 
+## v2 (2026-10-31)
+
+Built fresh from `design-v2.md`; v0.1's single `index.html` is gone (it is at `79c0adb` if needed).
+
+### Layout
+
+The spec's four layers are now four modules, meeting only in `js/main.js`:
+
+| Layer | File | Notes |
+|---|---|---|
+| Sequencer state | `js/state.js` | Plain data, presets, localStorage autosave, share links |
+| Audio engine | `js/audio.js` | Excitation → resonator bank → per-layer lane → bus |
+| Geometry renderer | `js/render.js` | three.js; also owns pointer editing on the shape |
+| Transport | `js/transport.js` | The only code that touches time |
+
+Plus `js/tonnetz.js` (pure torus math, tested under Node), `js/lull.js` (functions lifted from Lull, changes marked), `js/store.js` (IndexedDB recordings) and `js/ui.js` (DOM controls).
+
+### Decisions
+
+- **Which torus is drawn.** The 12 × 3 lattice the spec names, so each pitch class appears three times (each row is a circle of fifths, a major third above the last). The spec's census — 12 / 36 / 24, χ = 0 — is for the glued 12-vertex quotient, and the test checks that. Drawing the cover keeps the two axes as two honest circles, which is what lets (p, q) mean "p turns of fifths, q turns of thirds".
+- **Time.** One master clock in sixteenths. A layer is `len` steps over `span` sixteenths, and its position is computed from the master clock every tick, never accumulated. Polymeter (span = len) and polyrhythm (span fixed at a bar) are the same mechanism. The scheduler is stateless: each tick schedules every step whose time falls in `[until, now + 120 ms)`. Tempo changes re-anchor the clock at `until`, so nothing doubles or drops.
+- **Swing** applies to odd sixteenths of the master grid only. Triplet and polyrhythmic steps fall off that grid and are left straight, which is musically right.
+- **Ring view = drum machine, not unrolled pitch.** In the ring view a step sits at angle 2π·i/len on its layer's lane. On the torus it sits on the knot. For a (1, 0) orbit the two coincide exactly (the fifth-axis unrolls into the ring); for other knots the flatten slider is a continuous homotopy. When geometry and groove disagree, the groove wins.
+- **Resonator gain.** A constant-peak band-pass driven by excitation x rings at about sin(ω)/Q · |X(ω)|. Each strike computes |X(ω)| directly (a phasor sum over at most 2048 samples) and sets the makeup gain so the fundamental is normalised and the other partials follow the excitation's own spectrum. A mallet comes out dark and glass bright without separate tuning, and loudness doesn't swing with pitch. Measured peaks across all characters, registers 2–7 and feedback up to 0.95 stay between about 0.08 and 0.65 before the bus compressor (a mallet is softest in the top octave, as a real one is).
+- **Resonator feedback** loops the unity-gain band-pass outputs (before makeup) through a comb tuned to the fundamental with a tanh in the loop, so loop gain is the knob value and stays below 1.
+- **Pointer editing.** A capture-phase listener on the stage claims the gesture if it starts within 22 px (30 px touch) of a seat of the selected layer; otherwise it falls through to OrbitControls. Tangential motion snaps to the nearest empty seat, motion along the projected surface normal sets velocity, hovering a lattice neighbour of the node's vertex re-pitches it (stored as `da`/`db` offsets), and pulling ~95 px away deletes.
+
+### The §8 open questions, as answered here
+
+1. **Phones**: the torus works on a phone but is small; phones open in the ring view, torus one slider away.
+2. **Edge noise**: all 108 edges are drawn very faint. Edges around the selected layer's vertices brighten, edges at struck vertices flash, and a face only lights when all three of its notes sound or a layer is locked to it.
+3. **Polyphony**: voice cap 20 on touch devices (3 partials per resonator), 48 elsewhere (5 partials); oldest voice released first. Not yet measured on a real iPhone.
+4. **Drift**: continuous visually, quantized for pitch — the integer part of the precession picks the vertex, so pitches change only at cycle boundaries.
+
+### Tested
+
+Headless Chromium (software GL): loads with no console errors; plays; transport and realign readout run; tap, move, velocity, delete and re-pitch drags verified in both views; clicking the shape never changes the selected layer; resonator levels measured as above; 48-voice cap and stealing exercised. `node tests/tonnetz.test.mjs` passes.
+
+### Not tested
+
+Real audio on any device (levels were measured, not listened to), iPhone performance and battery, the microphone path in a real browser, Safari's handling of very high-Q biquads.
+
+---
+
+## v0.1
+
 Built 2026-10-31 from the *Geometric Drum / DJ Workstation* brief v0.1, reusing parts of Lull v2 and Harmonia.
 
 ## Audit of the two parents
